@@ -1,11 +1,11 @@
 Drupal.behaviors.pollanonHandleVoteView = function (context) {
     //Does this page contain poll form or poll results?
-  if (typeof Drupal.settings.pollanon == 'undefined') {
+  if (typeof PollAnon == 'undefined') {
     return;
   }
 
-  cookieName = 'pollanon-' + Drupal.settings.pollanon.nid;
-  ajahUrl = Drupal.settings.pollanon.ajahBase + Drupal.settings.pollanon.nid;
+  cookieName = 'pollanon-' + PollAnon.nid;
+  ajahUrl = PollAnon.ajahBase + PollAnon.nid;
 
   //Form element is hidden by CSS to prevent flashing on switching to result display
   $('form.pollanon').fadeIn('fast');

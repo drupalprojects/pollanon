@@ -60,7 +60,17 @@ function pollanon_form_alter(&$form, $form_state, $form_id) {
 
     if (!$settings_initialized) {
       $settings_initialized = TRUE;
-      drupal_add_js(array('pollanon' => array('nid' => $node->nid, 'ajahBase' => base_path() . 'pollanon/ajah/')), 'setting');
+      $base_path = base_path() . 'pollanon/ajah/';
+      $js = <<<EOT
+              if (typeof PollAnon == 'undefined') {
+                var PollAnon = {};
+              }
+              PollAnon.nid = {$node->nid}
+              PollAnon.ajahBase = '{$ajah_path}';
+EOT;
+      $form['pollanon_js'] = array(
+          '#value' => "<script type='text/javascript'>\n $js \n</script>",
+      );
     }
   }
 }
