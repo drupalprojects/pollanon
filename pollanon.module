@@ -50,7 +50,7 @@ function pollanon_form_alter(&$form, $form_state, $form_id) {
       $form['#attributes']['class'] .= ' pollanon';
     }
 
-    $results = variable_get('pollanon_use_ajah', FALSE)? '<span class="loading" />' : _pollanon_poll_results($node->nid);
+    $results = _pollanon_poll_results($node->nid);
     $form['pollanon-poll-results'] = array(
         '#value' => '<div class="pollanon-poll-results hidden" data-nid="' . $node->nid .  '">' . $results . '</div>'
     );
@@ -59,18 +59,15 @@ function pollanon_form_alter(&$form, $form_state, $form_id) {
     $form['vote']['#submit'][] = 'pollanon_handle_vote_submit';
 
     if (!$settings_initialized) {
-      $settings_initialized = TRUE;
-      $base_path = base_path() . 'pollanon/ajah/';
-      $js = <<<EOT
-              if (typeof PollAnon == 'undefined') {
-                var PollAnon = {};
-              }
-              PollAnon.nid = {$node->nid}
-              PollAnon.ajahBase = '{$ajah_path}';
+       $js = <<<EOT
+               if (typeof PollAnon == 'undefined') {
+                 var PollAnon = {};
+               }
+               PollAnon.nid = {$node->nid};
 EOT;
-      $form['pollanon_js'] = array(
-          '#value' => "<script type='text/javascript'>\n $js \n</script>",
-      );
+       $form['pollanon_js'] = array(
+           '#value' => "<script type='text/javascript'>\n $js \n</script>",
+       );
     }
   }
 }
@@ -83,8 +80,13 @@ function pollanon_handle_vote_validate($form, &$form_state) {
           return;
   }
 
-  if (!_pollanon_validate_request($form_state['values']['pollanonkey'], _pollanon_build_key())) {
-     drupal_goto($_GET['q'], array('error' => t('Cookie support required to anonymous voting')));
+  if (!_pollanon_validate_request($form_state['values']['pollanonkey'])) {
+    _pollanon_cookiemessage(t('Cookie support required to anonymous voting'));
+    drupal_goto($_GET['q']);
+  }
+  if (!_pollanon_ip_check($form['#node']->nid, ip_address())) {
+    _pollanon_cookiemessage(t('Voting temporarily closed for your remote address.'));
+    drupal_goto($_GET['q']);
   }
 }
 
@@ -98,13 +100,16 @@ function pollanon_handle_vote_submit($form, &$form_state) {
           return;
   }
 
+  $pollanon_key = $form_state['values']['pollanonkey'];
   $ip_address   = ip_address();
   $node         = $form['#node'];
   $choice       = $form_state['values']['choice'];
 
   //Create distinctive string to replace the real IP address
-  $fake_ip_value = "$ip_address#$pollanon_key-" . time();
+  $fake_ip_value = "$ip_address#$pollanon_key";
+
   _pollanon_modify_poll_vote_record($node->nid, $fake_ip_value, $ip_address);
+  _pollanon_clear_session_messages();
 
   $cookie_name = 'pollanon-' . $node->nid;
   //Set flag: User has submitted this form
@@ -113,7 +118,9 @@ function pollanon_handle_vote_submit($form, &$form_state) {
   setcookie('pollanon-submit', '', time() - 99999, '/');
 }
 
-
+/*
+ * $return string Four letter string from the beginning of the pollanon key.
+ */
 function _pollanon_build_key() {
   $user_agent   = $_SERVER['HTTP_USER_AGENT'];
   $user_agent_i = floor(strlen($user_agent)/2);
@@ -121,10 +128,19 @@ function _pollanon_build_key() {
   return $pollanon_key;
 }
 
-
-function _pollanon_validate_request($posted_key_value, $builded_key) {
-  return ($builded_key == $_COOKIE['pollanon-submit'] &&
-          $builded_key == $posted_key_value);
+/*
+ * Sanitize possible automated attempts to abuse the form.
+ * @return boolean Whether the form posted key value matches builded key.
+ */
+function _pollanon_validate_request($posted_key_value) {
+  $builded_key = _pollanon_build_key();
+  $posted_key_parts = explode('-', $posted_key_value);
+  $cookie_value = isset($_COOKIE['pollanon-submit'])? $_COOKIE['pollanon-submit'] : '';
+  $cookie_key_parts = explode('-', $_COOKIE['pollanon-submit']);
+  $js_generated_time = time(round($posted_key_parts[1]/1000));
+  return ($builded_key == $cookie_key_parts[0] &&
+          $builded_key == $posted_key_parts[0] &&
+          $js_generated_time > time() - 600);
 }
 
 
@@ -132,12 +148,12 @@ function _pollanon_modify_poll_vote_record($nid, $fake_ip_value, $ip_address) {
   db_query("UPDATE {poll_votes} SET hostname = '%s' WHERE nid = %d AND hostname = '%s'", $fake_ip_value, $nid, $ip_address);
 }
 
-
+/*
 function _pollanon_remove_poll_vote_record($nid, $ip_address, $choice) {
   db_query("DELETE FROM {poll_votes} WHERE nid = %d AND hostname = '%s'", $nid, $ip_address);
   db_query("UPDATE {poll_choices} SET chvotes = chvotes - 1 WHERE nid = %d AND chorder = %d", $nid, $choice);
 }
-
+*/
 
 function _pollanon_poll_results($nid) {
   $node = node_load($nid);
@@ -157,4 +173,39 @@ function _pollanon_ajah_results($nid) {
   }
   echo $output;
   drupal_page_footer();
+}
+
+function _pollanon_clear_session_messages() {
+  $msgs = drupal_get_messages('status');
+  if (count($msgs['status']) == 1 && $msgs['status'][0] == t('Your vote was recorded.')) {
+    drupal_get_messages('status', TRUE); //Clear status messages queue
+    _pollanon_cookiemessage(t('Your vote was recorded.'));
+  }
+  if (count($_SESSION) == 1 && isset($_SESSION['messages']) && empty($_SESSION['messages'])) {
+    //Messages without any content => clear
+    unset($_SESSION);
+  }
+}
+
+function _pollanon_ip_check($nid, $ip_address) {
+  $ok = FALSE;
+  $votes_for_this_ip = db_result(db_query("SELECT COUNT(*) FROM {pollanon_votes} " .
+                          "WHERE nid = %d AND hostname = '%s' AND timestamp > %d",
+                          $nid, $ip_address, time() - variable_get('pollanon_threshold_time', 600)));
+
+  //Is the given IP address allowed vote once more?
+  if ($votes_for_this_ip < variable_get('pollanon_threshold_count', 10)) {
+    db_query("INSERT INTO {pollanon_votes} (nid, hostname, timestamp) ".
+              "VALUES (%d, '%s', %d)", $nid, $ip_address, time());
+    $ok = TRUE;
+  }
+  return $ok;
+}
+
+function pollanon_cron() {
+  db_query("DELETE FROM {pollanon_votes} WHERE timestamp < %d", time() - variable_get('pollanon_threshold_time', 600));
+}
+
+function _pollanon_cookiemessage($msg) {
+  setcookie('pollanon-messages', check_plain($msg));
 }

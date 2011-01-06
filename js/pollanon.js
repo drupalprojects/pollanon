@@ -5,7 +5,6 @@ Drupal.behaviors.pollanonHandleVoteView = function (context) {
   }
 
   cookieName = 'pollanon-' + PollAnon.nid;
-  ajahUrl = PollAnon.ajahBase + PollAnon.nid;
 
   //Form element is hidden by CSS to prevent flashing on switching to result display
   $('form.pollanon').fadeIn('fast');
@@ -17,13 +16,9 @@ Drupal.behaviors.pollanonHandleVoteView = function (context) {
       //Hide poll form
       $('form.pollanon .vote-form').hide();
       //Display results
-      //$hiddenResults.removeClass('hidden');
-      if ($('.loading', $hiddenResults).length > 0) {
-        $hiddenResults.load(ajahUrl, function() {
-          $('.loading', $hiddenResults).remove();
-        });
-      }
-      $hiddenResults.fadeIn('fast');
+      $hiddenResults.hide(); //Needs to be hidden by jQuery for the fadeIn() to work
+      $hiddenResults.removeClass('hidden'); //Remove CSS hiding
+      $hiddenResults.fadeIn('fast'); //Show element with an animation
     }
   }
   else {
@@ -31,8 +26,17 @@ Drupal.behaviors.pollanonHandleVoteView = function (context) {
     ua = navigator.userAgent;
     uaI = Math.floor(ua.length/2);
     pollanonKey = ua? ua.substring(uaI, uaI+2) + ua.length : '';
+    pollanonKey += '-' + new Date().getTime();
     $.cookie('pollanon-submit', pollanonKey, {path: '/'});
     $('form.pollanon input[name="pollanonkey"]', context).attr('value', pollanonKey);
   }
+
+  msg = $.cookie('pollanon-messages');
+  if (msg) {
+    msg = unescape(msg.replace(/\+/g, " "));
+    $('form.pollanon').before('<div class="messages status">'+msg+'</div>');
+    $.cookie('pollanon-messages', null); //Remove message cookie
+  }
   
 };
+
