@@ -13,8 +13,9 @@ Drupal.behaviors.pollanonHandleVoteView = function (context) {
     //Cookie exists: This anonymous user has already submitted the given poll
     $hiddenResults = $('.pollanon-poll-results.hidden');
     if ($hiddenResults.length > 0) {
-      //Hide poll form
-      $('form.pollanon .vote-form').hide();
+      //Hide poll form options and button
+      $poll_form = $('form.pollanon .vote-form');
+      $('.form-radios, .form-submit', $poll_form).hide();
       //Display results
       $hiddenResults.hide(); //Needs to be hidden by jQuery for the fadeIn() to work
       $hiddenResults.removeClass('hidden'); //Remove CSS hiding
