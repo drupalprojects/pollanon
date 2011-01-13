@@ -1,6 +1,6 @@
 Drupal.behaviors.pollanonHandleVoteView = function (context) {
-    //Does this page contain poll form or poll results?
-  if (typeof PollAnon == 'undefined') {
+  //Does this page contain poll form or poll results?
+  if (typeof PollAnon == 'undefined' || !PollAnon.nid) {
     return;
   }
 
@@ -36,8 +36,7 @@ Drupal.behaviors.pollanonHandleVoteView = function (context) {
   if (msg) {
     msg = unescape(msg.replace(/\+/g, " "));
     $('form.pollanon').before('<div class="messages status">'+msg+'</div>');
-    $.cookie('pollanon-messages', null); //Remove message cookie
+    $.cookie('pollanon-messages', null, { path: '/' }); //Remove message cookie
   }
-  
-};
 
+};

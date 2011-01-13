@@ -7,7 +7,7 @@
 function pollanon_init() {
   drupal_add_css(drupal_get_path('module', 'pollanon') .'/pollanon.css');
   drupal_add_js(drupal_get_path('module', 'pollanon') .'/js/jquery.cookie.min.js');
-  drupal_add_js(drupal_get_path('module', 'pollanon') .'/js/pollanon.pack.js');
+  drupal_add_js(drupal_get_path('module', 'pollanon') .'/js/pollanon.js');
 }
 
 
@@ -23,12 +23,11 @@ function pollanon_menu() {
     'access arguments' => array('administer site configuration'),
     'file' => 'pollanon.admin.inc',
   );
-  $items['pollanon/ajah/%'] = array(
+  $items['pollanon/ajax/vote'] = array(
     'title' => '',
     'type' => MENU_CALLBACK,
-    'page callback' => '_pollanon_ajah_results',
-    'page arguments' => array(2),
-    'access arguments' => array('access content'),
+    'page callback' => '_pollanon_ajax_vote',
+    'access arguments' => array('vote on polls'),
   );
   return $items;
 }
@@ -40,7 +39,7 @@ function pollanon_menu() {
 function pollanon_form_alter(&$form, $form_state, $form_id) {
   static $settings_initialized = FALSE;
 
-  if ($form_id == 'poll_view_voting') {
+  if ($form_id == 'poll_view_voting' && user_is_anonymous()) {
     $node = $form['#node'];
 
     if (empty($form['#attributes']['class'])) {
@@ -54,16 +53,33 @@ function pollanon_form_alter(&$form, $form_state, $form_id) {
     $form['pollanon-poll-results'] = array(
         '#value' => '<div class="pollanon-poll-results hidden" data-nid="' . $node->nid .  '">' . $results . '</div>'
     );
-    $form['pollanonkey'] = array('#type' => 'hidden', '#default_value' => '');
+    $form['pollanonkey'] = array(
+        '#type' => 'hidden',
+        '#default_value' => ''
+    );
+    $form['pollanon-nid'] = array(
+        '#type' => 'hidden',
+        '#default_value' => $node->nid
+    );
+    
     $form['vote']['#validate'][] = 'pollanon_handle_vote_validate';
     $form['vote']['#submit'][] = 'pollanon_handle_vote_submit';
 
+    if (variable_get('pollanon_use_ajah', FALSE)) {
+      $form['vote']['#ahah'] = array(
+        'path' => 'pollanon/ajax/vote',
+        'wrapper' => 'poll-view-voting', //id attribute of the wrapper element => works only with one poll on the page at the time
+        'method' => 'replace',
+        'effect' => 'fade',
+      );
+    }
+
     if (!$settings_initialized) {
        $js = <<<EOT
-               if (typeof PollAnon == 'undefined') {
-                 var PollAnon = {};
-               }
-               PollAnon.nid = {$node->nid};
+              if (typeof PollAnon == 'undefined') {
+                var PollAnon = {};
+              }
+              PollAnon.nid = {$node->nid};
 EOT;
        $form['pollanon_js'] = array(
            '#value' => "<script type='text/javascript'>\n $js \n</script>",
@@ -96,7 +112,8 @@ function pollanon_handle_vote_submit($form, &$form_state) {
 
   if (!variable_get('pollanon_use_cookie_method', TRUE) ||  //Cookie restrictions disabled?
       empty($form_state['values']['pollanonkey']) ||        //Pollanon key not found
-      user_is_logged_in()) {                                //Authenticated users are handled by the poll module
+      user_is_logged_in() ||                                //Authenticated users are handled by the poll module
+      !isset($form['#node'])) {
           return;
   }
 
@@ -166,15 +183,6 @@ function _pollanon_poll_results($nid) {
 }
 
 
-function _pollanon_ajah_results($nid) {
-  $output = _pollanon_poll_results($nid);
-  if (!$output) {
-    $output = '<!-- Not found -->';
-  }
-  echo $output;
-  drupal_page_footer();
-}
-
 function _pollanon_clear_session_messages() {
   $msgs = drupal_get_messages('status');
   if (count($msgs['status']) == 1 && $msgs['status'][0] == t('Your vote was recorded.')) {
@@ -189,6 +197,11 @@ function _pollanon_clear_session_messages() {
 
 function _pollanon_ip_check($nid, $ip_address) {
   $ok = FALSE;
+
+  if (variable_get('pollanon_threshold_count', 10) == 0) {
+    return TRUE; //No IP restrictions
+  }
+
   $votes_for_this_ip = db_result(db_query("SELECT COUNT(*) FROM {pollanon_votes} " .
                           "WHERE nid = %d AND hostname = '%s' AND timestamp > %d",
                           $nid, $ip_address, time() - variable_get('pollanon_threshold_time', 600)));
@@ -207,5 +220,49 @@ function pollanon_cron() {
 }
 
 function _pollanon_cookiemessage($msg) {
-  setcookie('pollanon-messages', check_plain($msg));
+  static $cache = '';
+  if (!empty($msg)) {
+    $cache .= "$msg ";
+    setcookie('pollanon-messages', check_plain($cache), 0, '/');
+  }
+  return $cache;
+}
+
+
+function _pollanon_ajax_vote() {
+  if (!isset($_POST['pollanon-nid'])) {
+    drupal_json(array('status' => TRUE, 'data' => ''));
+    exit();
+  }
+
+  /* Execute form programmatically */
+  $form_state = array('storage' => NULL, 'submitted' => FALSE);
+  $form_build_id = $_POST['form_build_id'];
+
+// Get the form from the cache.
+  $form = form_get_cache($form_build_id, $form_state);
+  $args = $form['#parameters'];
+  $form_id = array_shift($args);
+
+  // We will run some of the submit handlers so we need to disable redirecting.
+  $form['#redirect'] = FALSE;
+
+  // We need to process the form, prepare for that by setting a few internals
+  // variables.
+  $form['#post'] = $_POST;
+  $form['#programmed'] = FALSE;
+  $form_state['post'] = $_POST;
+
+// Build, validate and if possible, submit the form.
+  drupal_process_form($form_id, $form, $form_state);
+  // This call recreates the form relying solely on the form_state that the
+  // drupal_process_form set up.
+  $form = drupal_rebuild_form($form_id, $form_state, $args, $form_build_id);
+
+  // Render the new output.
+  $output = drupal_render($form);
+  if (!$output) {
+    $output = _pollanon_cookiemessage(NULL);
+  }
+  drupal_json(array('status' => TRUE, 'data' => $output));
 }
