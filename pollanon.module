@@ -7,7 +7,7 @@
 function pollanon_init() {
   drupal_add_css(drupal_get_path('module', 'pollanon') .'/pollanon.css');
   drupal_add_js(drupal_get_path('module', 'pollanon') .'/js/jquery.cookie.min.js');
-  drupal_add_js(drupal_get_path('module', 'pollanon') .'/js/pollanon.js');
+  drupal_add_js(drupal_get_path('module', 'pollanon') .'/js/pollanon.pack.js');
 }
 
 
@@ -128,11 +128,11 @@ function pollanon_handle_vote_submit($form, &$form_state) {
   _pollanon_modify_poll_vote_record($node->nid, $fake_ip_value, $ip_address);
   _pollanon_clear_session_messages();
 
-  $cookie_name = 'pollanon-' . $node->nid;
+  $cookie_name = 'pa-' . $node->nid;
   //Set flag: User has submitted this form
   setcookie($cookie_name, '1', time()+3600*24*31, '/'); // Expire in 3 months
   //Remove the key cookie
-  setcookie('pollanon-submit', '', time() - 99999, '/');
+  setcookie('pa-submit', '', time() - 99999, '/');
 }
 
 /*
@@ -152,8 +152,8 @@ function _pollanon_build_key() {
 function _pollanon_validate_request($posted_key_value) {
   $builded_key = _pollanon_build_key();
   $posted_key_parts = explode('-', $posted_key_value);
-  $cookie_value = isset($_COOKIE['pollanon-submit'])? $_COOKIE['pollanon-submit'] : '';
-  $cookie_key_parts = explode('-', $_COOKIE['pollanon-submit']);
+  $cookie_value = isset($_COOKIE['pa-submit'])? $_COOKIE['pa-submit'] : '';
+  $cookie_key_parts = explode('-', $_COOKIE['pa-submit']);
   $js_generated_time = time(round($posted_key_parts[1]/1000));
   return ($builded_key == $cookie_key_parts[0] &&
           $builded_key == $posted_key_parts[0] &&
@@ -223,7 +223,7 @@ function _pollanon_cookiemessage($msg) {
   static $cache = '';
   if (!empty($msg)) {
     $cache .= "$msg ";
-    setcookie('pollanon-messages', check_plain($cache), 0, '/');
+    setcookie('pa-messages', check_plain($cache), 0, '/');
   }
   return $cache;
 }
