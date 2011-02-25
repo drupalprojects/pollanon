@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 function pollanon_install() {
   variable_set('pollanon_use_cookie_method', TRUE); //By default use cookies instead of IP address to restrict voting on polls.
