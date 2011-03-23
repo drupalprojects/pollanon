@@ -43,7 +43,7 @@ Poll module enabled. For more information, visit the handbook page:
         // Remove has_js and Google Analytics __* cookies.
         set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(__[a-z]+|has_js)=[^;]*", "");
         // Remove pollanon cookies.
-        set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(pollanon(.*))=[^;]*", "");
+        set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(pa-(.*))=[^;]*", "");
         // Remove a ";" prefix, if present.
         set req.http.Cookie = regsub(req.http.Cookie, "^;\s*", "");
         // Remove empty cookies.
@@ -58,14 +58,3 @@ Poll module enabled. For more information, visit the handbook page:
 Current maintainers:
 * Tomi Mikola (TomiMikola) - http://drupal.org/user/183191
 
-
-This project has been sponsored by:
-* Aller Media
-    Aller is a magazine publisher in the Nordic countries,
-    and has several brand-related web sites.
-    Aller Media puts a strong emphasis on digital media.
-    Visit http://www.aller.fi/en/ for more information.
-
-* Mearra
-    Professional Drupal consulting in Europe.
-    Visit http://mearra.com for more information.

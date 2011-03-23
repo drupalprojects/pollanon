@@ -15,7 +15,7 @@ function pollanon_init() {
  */
 function pollanon_menu() {
   $items = array();
-  $items['admin/settings/pollanon'] = array(
+  $items['admin/config/content/pollanon'] = array(
     'title' => t('Poll Enhancements'),
     'page callback' => 'drupal_get_form',
     'page arguments' => array('pollanon_settings_form'),
@@ -35,8 +35,8 @@ function pollanon_menu() {
 /**
  * Implements hook_form_alter().
  */
-function pollanon_form_alter(&$form, $form_state, $form_id) {
-  static $settings_initialized = FALSE;
+function pollanon_form_alter(&$form, &$form_state, $form_id) {
+  $settings_initialized = &drupal_static(__FUNCTION__, FALSE);
 
   if ($form_id == 'poll_view_voting' && user_is_anonymous()) {
     $node = $form['#node'];
@@ -50,7 +50,7 @@ function pollanon_form_alter(&$form, $form_state, $form_id) {
 
     $results = _pollanon_poll_results($node->nid);
     $form['pollanon-poll-results'] = array(
-        '#value' => '<div class="pollanon-poll-results hidden" data-nid="' . $node->nid .  '">' . $results . '</div>'
+        '#markup' => '<div class="pollanon-poll-results hidden" data-nid="' . $node->nid .  '">' . $results . '</div>'
     );
     $form['pollanonkey'] = array(
         '#type' => 'hidden',
@@ -65,7 +65,7 @@ function pollanon_form_alter(&$form, $form_state, $form_id) {
     $form['vote']['#submit'][] = 'pollanon_handle_vote_submit';
 
     if (variable_get('pollanon_use_ajah', FALSE)) {
-      $form['vote']['#ahah'] = array(
+      $form['vote']['#ajax'] = array(
         'path' => 'pollanon/ajax/vote',
         'wrapper' => 'poll-view-voting', //id attribute of the wrapper element => works only with one poll on the page at the time
         'method' => 'replace',
@@ -81,7 +81,7 @@ function pollanon_form_alter(&$form, $form_state, $form_id) {
               PollAnon.nid = {$node->nid};
 EOT;
        $form['pollanon_js'] = array(
-           '#value' => "<script type='text/javascript'>\n $js \n</script>",
+           '#markup' => "<script type='text/javascript'>\n $js \n</script>",
        );
     }
   }
@@ -161,15 +161,15 @@ function _pollanon_validate_request($posted_key_value) {
 
 
 function _pollanon_modify_poll_vote_record($nid, $fake_ip_value, $ip_address) {
-  db_query("UPDATE {poll_votes} SET hostname = '%s' WHERE nid = %d AND hostname = '%s'", $fake_ip_value, $nid, $ip_address);
+  db_update('poll_vote')
+    ->fields(array(
+      'hostname' => $fake_ip_value,
+    ))
+    ->condition('nid', $nid, '=')
+    ->condition('hostname', $ip_address, '=')
+    ->execute();
 }
 
-/*
-function _pollanon_remove_poll_vote_record($nid, $ip_address, $choice) {
-  db_query("DELETE FROM {poll_votes} WHERE nid = %d AND hostname = '%s'", $nid, $ip_address);
-  db_query("UPDATE {poll_choices} SET chvotes = chvotes - 1 WHERE nid = %d AND chorder = %d", $nid, $choice);
-}
-*/
 
 function _pollanon_poll_results($nid) {
   $node = node_load($nid);
@@ -184,6 +184,9 @@ function _pollanon_poll_results($nid) {
 
 function _pollanon_clear_session_messages() {
   $msgs = drupal_get_messages('status');
+  if (isset($_SESSION['poll_vote'])) {
+    unset($_SESSION['poll_vote']);
+  }
   if (count($msgs['status']) == 1 && $msgs['status'][0] == t('Your vote was recorded.')) {
     drupal_get_messages('status', TRUE); //Clear status messages queue
     _pollanon_cookiemessage(t('Your vote was recorded.'));
@@ -201,21 +204,30 @@ function _pollanon_ip_check($nid, $ip_address) {
     return TRUE; //No IP restrictions
   }
 
-  $votes_for_this_ip = db_result(db_query("SELECT COUNT(*) FROM {pollanon_votes} " .
-                          "WHERE nid = %d AND hostname = '%s' AND timestamp > %d",
-                          $nid, $ip_address, time() - variable_get('pollanon_threshold_time', 600)));
+  $votes_for_this_ip = db_query("SELECT COUNT(*) FROM {pollanon_votes} " .
+                                  "WHERE nid = :nid AND hostname = :hostname AND timestamp > :timestamp",
+                                  array(':nid' => $nid, ':hostname' => $ip_address, ':timestamp' => time() - variable_get('pollanon_threshold_time', 600))
+                                )->fetchField(0);
 
   //Is the given IP address allowed vote once more?
   if ($votes_for_this_ip < variable_get('pollanon_threshold_count', 10)) {
-    db_query("INSERT INTO {pollanon_votes} (nid, hostname, timestamp) ".
-              "VALUES (%d, '%s', %d)", $nid, $ip_address, time());
+    db_insert('pollanon_votes')
+      ->fields(array(
+        'nid' => $nid,
+        'hostname' => $ip_address,
+        'timestamp' => time(),
+      ))
+      ->execute();
     $ok = TRUE;
   }
   return $ok;
 }
 
 function pollanon_cron() {
-  db_query("DELETE FROM {pollanon_votes} WHERE timestamp < %d", time() - variable_get('pollanon_threshold_time', 600));
+  $t = time() - variable_get('pollanon_threshold_time', 600);
+  db_delete('pollanon_votes')
+    ->condition('timestamp', $t, '<')
+    ->execute();
 }
 
 function _pollanon_cookiemessage($msg) {
@@ -230,7 +242,7 @@ function _pollanon_cookiemessage($msg) {
 
 function _pollanon_ajax_vote() {
   if (!isset($_POST['pollanon-nid'])) {
-    drupal_json(array('status' => TRUE, 'data' => ''));
+    drupal_json_output(array('status' => TRUE, 'data' => ''));
     exit();
   }
 
@@ -263,5 +275,5 @@ function _pollanon_ajax_vote() {
   if (!$output) {
     $output = _pollanon_cookiemessage(NULL);
   }
-  drupal_json(array('status' => TRUE, 'data' => $output));
+  drupal_json_output(array('status' => TRUE, 'data' => $output));
 }
