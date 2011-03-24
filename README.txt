@@ -43,7 +43,7 @@ Poll module enabled. For more information, visit the handbook page:
         // Remove has_js and Google Analytics __* cookies.
         set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(__[a-z]+|has_js)=[^;]*", "");
         // Remove pollanon cookies.
-        set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(pollanon(.*))=[^;]*", "");
+        set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(pa-(.*))=[^;]*", "");
         // Remove a ";" prefix, if present.
         set req.http.Cookie = regsub(req.http.Cookie, "^;\s*", "");
         // Remove empty cookies.
