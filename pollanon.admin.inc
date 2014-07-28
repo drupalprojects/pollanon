@@ -7,6 +7,9 @@
  * Administration functions and forms.
  */
 
+/**
+ * Settings form pollanon module.
+ */
 function pollanon_settings_form() {
   $form = array();
 
@@ -20,14 +23,14 @@ function pollanon_settings_form() {
     '#title' => t('How many votes is allowed to from a single IP address in ten minutes?'),
     '#default_value' => variable_get('pollanon_threshold_count', 10),
     '#options' => array(
-        '0' => t('Unlimited'),
-        '1' => '1',
-        '5' => '5',
-        '10' => '10',
-        '20' => '20',
-        '50' => '50',
-        '500' => '500',
-      )
+      '0' => t('Unlimited'),
+      '1' => '1',
+      '5' => '5',
+      '10' => '10',
+      '20' => '20',
+      '50' => '50',
+      '500' => '500',
+    ),
   );
   $form['pollanon_use_ajah'] = array(
     '#type' => 'checkbox',

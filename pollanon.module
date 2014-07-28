@@ -1,17 +1,22 @@
 <?php
+/**
+ * @file
+ * File for pollanon module.
+ */
 
 /**
  * Implements hook_init().
  */
 function pollanon_init() {
-  drupal_add_css(drupal_get_path('module', 'pollanon') .'/pollanon.css');
-  drupal_add_js(drupal_get_path('module', 'pollanon') .'/js/jquery.cookie.min.js');
-  drupal_add_js(drupal_get_path('module', 'pollanon') .'/js/pollanon.pack.js');
+  $pollanon_path = drupal_get_path('module', 'pollanon');
+  drupal_add_css($pollanon_path . '/pollanon.css');
+  drupal_add_js($pollanon_path . '/js/jquery.cookie.min.js');
+  drupal_add_js($pollanon_path . '/js/pollanon.pack.js');
 }
 
 
 /**
- * Implementation of hook_menu().
+ * Implements hook_menu().
  */
 function pollanon_menu() {
   $items = array();
@@ -50,17 +55,17 @@ function pollanon_form_alter(&$form, &$form_state, $form_id) {
 
     $results = _pollanon_poll_results($node->nid);
     $form['pollanon-poll-results'] = array(
-        '#markup' => '<div class="pollanon-poll-results hidden" data-nid="' . $node->nid .  '">' . $results . '</div>'
+      '#markup' => '<div class="pollanon-poll-results hidden" data-nid="' . $node->nid .  '">' . $results . '</div>'
     );
     $form['pollanonkey'] = array(
-        '#type' => 'hidden',
-        '#default_value' => ''
+      '#type' => 'hidden',
+      '#default_value' => ''
     );
     $form['pollanon-nid'] = array(
-        '#type' => 'hidden',
-        '#default_value' => $node->nid
+      '#type' => 'hidden',
+      '#default_value' => $node->nid
     );
-    
+
     $form['vote']['#validate'][] = 'pollanon_handle_vote_validate';
     $form['vote']['#submit'][] = 'pollanon_handle_vote_submit';
 
@@ -75,24 +80,26 @@ function pollanon_form_alter(&$form, &$form_state, $form_id) {
 
     if (!$settings_initialized) {
        $js = <<<EOT
-              if (typeof PollAnon == 'undefined') {
-                var PollAnon = {};
-              }
-              PollAnon.nid = {$node->nid};
+        if (typeof PollAnon == 'undefined') {
+          var PollAnon = {};
+        }
+        PollAnon.nid = {$node->nid};
 EOT;
        $form['pollanon_js'] = array(
-           '#markup' => "<script type='text/javascript'>\n $js \n</script>",
+         '#markup' => "<script type='text/javascript'>\n $js \n</script>",
        );
     }
   }
 }
 
-
+/**
+ * Validate for handle vote.
+ */
 function pollanon_handle_vote_validate($form, &$form_state) {
-  if (!variable_get('pollanon_use_cookie_method', TRUE) ||  //Cookie restrictions disabled?
-      empty($form_state['values']['pollanonkey']) ||        //Pollanon key not found
-      user_is_logged_in()) {                                //Authenticated users are handled by the poll module
-          return;
+  if (!variable_get('pollanon_use_cookie_method', TRUE) ||  // Cookie restrictions disabled?
+    empty($form_state['values']['pollanonkey']) ||        // Pollanon key not found!
+    user_is_logged_in()) {                                // Authenticated users are handled by the poll module!
+    return;
   }
 
   if (!_pollanon_validate_request($form_state['values']['pollanonkey'])) {
@@ -105,32 +112,34 @@ function pollanon_handle_vote_validate($form, &$form_state) {
   }
 }
 
-
+/**
+ * Submit for handle vote.
+ */
 function pollanon_handle_vote_submit($form, &$form_state) {
   global $user;
 
-  if (!variable_get('pollanon_use_cookie_method', TRUE) ||  //Cookie restrictions disabled?
-      empty($form_state['values']['pollanonkey']) ||        //Pollanon key not found
-      user_is_logged_in() ||                                //Authenticated users are handled by the poll module
-      !isset($form['#node'])) {
-          return;
+  if (!variable_get('pollanon_use_cookie_method', TRUE) ||  // Cookie restrictions disabled?
+    empty($form_state['values']['pollanonkey']) ||        // Pollanon key not found!
+    user_is_logged_in() ||                                // Authenticated users are handled by the poll module!
+    !isset($form['#node'])) {
+    return;
   }
 
   $pollanon_key = $form_state['values']['pollanonkey'];
-  $ip_address   = ip_address();
-  $node         = $form['#node'];
-  $choice       = $form_state['values']['choice'];
+  $ip_address = ip_address();
+  $node = $form['#node'];
+  $choice = $form_state['values']['choice'];
 
-  //Create distinctive string to replace the real IP address
+  // Create distinctive string to replace the real IP address.
   $fake_ip_value = "$ip_address#$pollanon_key";
 
   _pollanon_modify_poll_vote_record($node->nid, $fake_ip_value, $ip_address);
   _pollanon_clear_session_messages();
 
   $cookie_name = 'pa-' . $node->nid;
-  //Set flag: User has submitted this form
-  setcookie($cookie_name, '1', time()+3600*24*31, '/'); // Expire in 3 months
-  //Remove the key cookie
+  // Set flag: User has submitted this form.
+  setcookie($cookie_name, '1', time() + 3600 * 24 * 31, '/'); // Expire in 3 months!
+  // Remove the key cookie.
   setcookie('pa-submit', '', time() - 99999, '/');
 }
 
@@ -139,8 +148,8 @@ function pollanon_handle_vote_submit($form, &$form_state) {
  */
 function _pollanon_build_key() {
   $user_agent   = $_SERVER['HTTP_USER_AGENT'];
-  $user_agent_i = floor(strlen($user_agent)/2);
-  $pollanon_key = !empty($user_agent)? substr($user_agent, $user_agent_i, 2) . strlen($user_agent) : '';
+  $user_agent_i = floor(strlen($user_agent) / 2);
+  $pollanon_key = !empty($user_agent) ? substr($user_agent, $user_agent_i, 2) . strlen($user_agent) : '';
   return $pollanon_key;
 }
 
@@ -153,13 +162,15 @@ function _pollanon_validate_request($posted_key_value) {
   $posted_key_parts = explode('-', $posted_key_value);
   $cookie_value = isset($_COOKIE['pa-submit'])? $_COOKIE['pa-submit'] : '';
   $cookie_key_parts = explode('-', $_COOKIE['pa-submit']);
-  $js_generated_time = time(round($posted_key_parts[1]/1000));
+  $js_generated_time = time(round($posted_key_parts[1] / 1000));
   return ($builded_key == $cookie_key_parts[0] &&
           $builded_key == $posted_key_parts[0] &&
           $js_generated_time > time() - 600);
 }
 
-
+/**
+ * Save poll vote.
+ */
 function _pollanon_modify_poll_vote_record($nid, $fake_ip_value, $ip_address) {
   db_update('poll_vote')
     ->fields(array(
@@ -170,7 +181,9 @@ function _pollanon_modify_poll_vote_record($nid, $fake_ip_value, $ip_address) {
     ->execute();
 }
 
-
+/**
+ * Poll results.
+ */
 function _pollanon_poll_results($nid) {
   $node = node_load($nid);
   if ($node && $node->type == 'poll') {
@@ -181,7 +194,9 @@ function _pollanon_poll_results($nid) {
   }
 }
 
-
+/**
+ * Poll session messages.
+ */
 function _pollanon_clear_session_messages() {
   $msgs = drupal_get_messages('status');
   if (isset($_SESSION['poll_vote'])) {
@@ -192,16 +207,19 @@ function _pollanon_clear_session_messages() {
     _pollanon_cookiemessage(t('Your vote was recorded.'));
   }
   if (count($_SESSION) == 1 && isset($_SESSION['messages']) && empty($_SESSION['messages'])) {
-    //Messages without any content => clear
+    // Messages without any content => clear.
     unset($_SESSION);
   }
 }
 
+/**
+ * Function for check ip.
+ */
 function _pollanon_ip_check($nid, $ip_address) {
   $ok = FALSE;
 
   if (variable_get('pollanon_threshold_count', 10) == 0) {
-    return TRUE; //No IP restrictions
+    return TRUE; // No IP restrictions!
   }
 
   $votes_for_this_ip = db_query("SELECT COUNT(*) FROM {pollanon_votes} " .
@@ -223,6 +241,9 @@ function _pollanon_ip_check($nid, $ip_address) {
   return $ok;
 }
 
+/**
+ * Implements hook_cron().
+ */
 function pollanon_cron() {
   $t = time() - variable_get('pollanon_threshold_time', 600);
   db_delete('pollanon_votes')
@@ -230,6 +251,9 @@ function pollanon_cron() {
     ->execute();
 }
 
+/**
+ * Function set cookie message.
+ */
 function _pollanon_cookiemessage($msg) {
   static $cache = '';
   if (!empty($msg)) {
@@ -239,7 +263,9 @@ function _pollanon_cookiemessage($msg) {
   return $cache;
 }
 
-
+/**
+ * Function vote ajax reponse.
+ */
 function _pollanon_ajax_vote() {
   if (!isset($_POST['pollanon-nid'])) {
     drupal_json_output(array('status' => TRUE, 'data' => ''));
