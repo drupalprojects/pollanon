@@ -5,17 +5,6 @@
  */
 
 /**
- * Implements hook_init().
- */
-function pollanon_init() {
-  $pollanon_path = drupal_get_path('module', 'pollanon');
-  drupal_add_css($pollanon_path . '/pollanon.css');
-  drupal_add_js($pollanon_path . '/js/jquery.cookie.min.js');
-  drupal_add_js($pollanon_path . '/js/pollanon.pack.js');
-}
-
-
-/**
  * Implements hook_menu().
  */
 function pollanon_menu() {
@@ -44,6 +33,17 @@ function pollanon_form_alter(&$form, &$form_state, $form_id) {
   $settings_initialized = &drupal_static(__FUNCTION__, FALSE);
 
   if ($form_id == 'poll_view_voting' && user_is_anonymous()) {
+    $path = drupal_get_path('module', 'pollanon');
+    $form['#attached'] = array(
+      'js' => array(
+        drupal_add_js($path . '/js/jquery.cookie.min.js'),
+        drupal_add_js($path . '/js/pollanon.pack.js')
+      ),
+      'css' => array(
+        drupal_add_css($path . '/pollanon.css')
+      )
+    );
+
     $node = $form['#node'];
 
     if (empty($form['#attributes']['class'])) {
