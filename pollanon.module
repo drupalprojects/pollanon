@@ -37,7 +37,7 @@ function pollanon_form_alter(&$form, &$form_state, $form_id) {
     $form['#attached'] = array(
       'js' => array(
         drupal_add_js($path . '/js/jquery.cookie.min.js'),
-        drupal_add_js($path . '/js/pollanon.pack.js')
+        drupal_add_js($path . '/js/pollanon.js')
       ),
       'css' => array(
         drupal_add_css($path . '/css/pollanon.css')
