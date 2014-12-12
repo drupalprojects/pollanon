@@ -40,7 +40,7 @@ function pollanon_form_alter(&$form, &$form_state, $form_id) {
         drupal_add_js($path . '/js/pollanon.pack.js')
       ),
       'css' => array(
-        drupal_add_css($path . '/pollanon.css')
+        drupal_add_css($path . '/css/pollanon.css')
       )
     );
 
