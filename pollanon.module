@@ -46,12 +46,7 @@ function pollanon_form_alter(&$form, &$form_state, $form_id) {
 
     $node = $form['#node'];
 
-    if (empty($form['#attributes']['class'])) {
-      $form['#attributes']['class'] = 'pollanon';
-    }
-    else {
-      $form['#attributes']['class'] .= ' pollanon';
-    }
+    $form['#attributes']['class'][] = 'pollanon';
 
     $results = _pollanon_poll_results($node->nid);
     $form['pollanon-poll-results'] = array(
