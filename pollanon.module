@@ -34,15 +34,9 @@ function pollanon_form_alter(&$form, &$form_state, $form_id) {
 
   if ($form_id == 'poll_view_voting' && user_is_anonymous()) {
     $path = drupal_get_path('module', 'pollanon');
-    $form['#attached'] = array(
-      'js' => array(
-        $path . '/js/jquery.cookie.min.js',
-        $path . '/js/pollanon.js'
-      ),
-      'css' => array(
-        $path . '/css/pollanon.css'
-      )
-    );
+    $form['#attached']['js'][] = $path . '/js/jquery.cookie.min.js';
+    $form['#attached']['js'][] = $path . '/js/pollanon.js';
+    $form['#attached']['css'][] = $path . '/css/pollanon.css';
 
     $node = $form['#node'];
 
